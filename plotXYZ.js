@@ -1,94 +1,185 @@
-function PlotXYZ (settings) {
-  this.dimensions = {
-    height: settings.dimensions.height,
-    width:  settings.dimensions.width
-  };
-  this.values = settings.values;
-};
+'use strict'
 
-PlotXYZ.prototype.getBoundingBox = function (buffer) {
-  // buffer unit of measurement is 10 meters
-  if (!buffer) {
-    buffer = 100;
+class PlotXYZ {
+
+  constructor(settings) {
+    this._settings = settings;
+
+    this.dimensions = {
+      height: settings.dimensions.height,
+      width:  settings.dimensions.width
+    };
+
+    this.values = settings.values.map((ea) => {
+      return PlotXYZ._getSinglePoint(ea);
+    });
   }
 
-  const vals = this.values.filter(function (ea) {
-    if (isNaN(ea.lat) || isNaN(ea.lng)) {
-      return false;
-    } else {
-      return true;
-    }
-  });
+  static _getSinglePoint(point) {
+    const lat = Number(point.lat);
+    const lng = Number(point.lng);
+    const val = Number(point.val);
+    return {lat: lat, lng: lng, val: val};
+  }
 
-  // credit: obtained via
-  // gis.stackexchange.com/questions/172554/calculating-bounding-box-of-given-set-of-coordinates-from-leaflet-draw
-  let latitudes = []; 
-  let longitudes = []; 
+  getValues() {
+    return this.values;
+  }
 
-  vals.forEach(function (ea) {
-    latitudes.push(ea.lat);
-    longitudes.push(ea.lng);
-  });
-
-  const minLat = Math.min.apply(null, latitudes);
-  const maxLat = Math.max.apply(null, latitudes);
-  const minLng = Math.min.apply(null, longitudes);
-  const maxLng = Math.max.apply(null, longitudes);
-
-  // TODO: add the buffer into the output bounding box
-  return [[minLat, minLng], [maxLat, maxLng]];
-};
-
-PlotXYZ.prototype.getMatrixValues = function () {
-  const boundingBox = this.getBoundingBox();
-  const minLat = boundingBox[0][0];
-  const maxLat = boundingBox[1][0];
-  const minLng = boundingBox[0][1];
-  const maxLng = boundingBox[1][1];
-
-  const width = this.dimensions.width;
-  const height = this.dimensions.height;
-
-  const vals = this.values;
-
-  const latChange = (maxLat - minLat)/width;
-  const lngChange = (maxLng - minLng)/height;
-
-  let outputValues = [];
-
-  for (var iW = 0; iW < width; iW++) {
-    for (var iH = 0; iH < height; iH++) {
-      let startLat = minLat + latChange * iW;
-      let endLat   = minLat + latChange * (iW + 1);
-      let startLng = minLng + lngChange * iH;
-      let endLng   = minLng + lngChange * (iH + 1);
-
-      let inRegion = vals.filter(function (ea) {
-        if (ea.lat > startLat && 
-            ea.lat < endLat && 
-            ea.lng > startLng && 
-            ea.lng  < endLng) {
-          return true;
-        } else {
-          return false;
+  getGeoJSON() {
+    let layer = L.geoJSON();
+    this.values.forEach((ea) => {
+      let feature = {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [ea.lng, ea.lat]
         }
-      }).map(function (ea) {
-        return ea.val;
+      };
+      layer.addData(feature);
+    });
+    return layer;
+  }
+
+  getMatrix(resolution=100, buffer=0) {
+    const bounds = this.getBoundingBox(buffer);
+
+    // lets get the grid system length, height parameters
+    bounds.height = Math.abs(bounds.northwest.lat - bounds.southwest.lat);
+    bounds.width = Math.abs(bounds.northwest.lng - bounds.northeast.lng);
+
+    let largestDirection = bounds.height >= bounds.width ? 'height' : 'width';
+    let smallestDirection = bounds.height < bounds.width ? 'height' : 'width';
+    let blockSideLength = bounds[largestDirection]/resolution;
+
+    let widthCount = Math.ceil(largestDirection == 'width' ? bounds[largestDirection]/blockSideLength : bounds[smallestDirection]/blockSideLength);
+    let heightCount = Math.ceil(largestDirection == 'height' ? bounds[largestDirection]/blockSideLength : bounds[smallestDirection]/blockSideLength);
+
+    // now lets create a matric of GeoJSONs according to that grid
+    let resultingMatrix = [];
+    for (var iH = 0; iH < heightCount; iH++) {
+      let oneRow = [];
+
+      for (var iW = 0; iW < widthCount; iW++) {
+        let n = bounds.northwest.lat - (iH * blockSideLength);
+        let e = bounds.northwest.lng + ((iW + 1) * blockSideLength);
+        let w = bounds.northwest.lng + (iW * blockSideLength);
+        let s = bounds.northwest.lat - ((iH + 1) * blockSideLength);
+        let feature = {
+          type: 'Feature',
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[ [w, n], [e, n], [e, s], [w, s], [w, n], ]]
+          }
+        };
+        oneRow.push(feature);
+      }
+
+      resultingMatrix.push(oneRow);
+    }
+
+    // now let's determine the value for each of these GeoJSONs
+    resultingMatrix = resultingMatrix.map((row) => {
+
+      console.log('row', L.geoJSON(row).getBounds());
+      let rowBounds = L.geoJSON(row).getBounds();
+
+      let bounds = L.geoJSON(cell).getBounds();
+      let onesInRow = this.values.filter((value) => {
+        let point = L.latLng(value);
+        return bounds.contains(point);
       });
 
-      if (inRegion.length) {
-        let sum = inRegion.reduce(function(a, b) { return a + b; });
-        let avg = sum / inRegion.length;
-        outputValues.push(avg);
-      } else {
-        outputValues.push(0);
-      }
-    }
+      row = row.map((cell) => {
+        // check which of the points are in each
+        let StartMilliseconds = new Date().getTime();
+        let bounds = L.geoJSON(cell).getBounds();
+        let onesInside = this.values.filter((value) => {
+          let point = L.latLng(value);
+          return bounds.contains(point);
+        });
+        let ElapsedMilliseconds = new Date().getTime() - StartMilliseconds;
+        console.log('elapsed', ElapsedMilliseconds/1000);
+
+        let average = 0;
+        if (onesInside.length) {
+          onesInside.forEach((ea) => {
+            if (!isNaN(ea.val)) {
+              average += Number(ea.val);
+            }
+          });
+          average = average/onesInside.length;
+        }
+        if (!cell.properties) cell.properties = {};
+        cell.properties.val = average;
+        return cell;
+      });
+
+      return row;
+    })
+
+    return resultingMatrix;
+
+    // const minLat = boundingBox[0][0];
+    // const maxLat = boundingBox[1][0];
+    // const minLng = boundingBox[0][1];
+    // const maxLng = boundingBox[1][1];
+
+    // const width = this.dimensions.width;
+    // const height = this.dimensions.height;
+
+    // const vals = this.values;
+    // const latChange = (maxLat - minLat)/width;
+    // const lngChange = (maxLng - minLng)/height;
+
+    // let outputValues = [];
+
+    // for (var iW = 0; iW < width; iW++) {
+    //   for (var iH = 0; iH < height; iH++) {
+    //     let startLat = minLat + latChange * iW;
+    //     let endLat   = minLat + latChange * (iW + 1);
+    //     let startLng = minLng + lngChange * iH;
+    //     let endLng   = minLng + lngChange * (iH + 1);
+
+    //     let inRegion = vals.filter(function (ea) {
+    //       if (ea.lat > startLat && 
+    //           ea.lat < endLat && 
+    //           ea.lng > startLng && 
+    //           ea.lng  < endLng) {
+    //         return true;
+    //       } else {
+    //         return false;
+    //       }
+    //     }).map(function (ea) {
+    //       return ea.val;
+    //     });
+
+    //     if (inRegion.length) {
+    //       let sum = inRegion.reduce(function(a, b) { return a + b; });
+    //       let avg = sum / inRegion.length;
+    //       outputValues.push(avg);
+    //     } else {
+    //       outputValues.push(0);
+    //     }
+    //   }
+    // }
+
+    // return outputValues;
   }
 
-  return outputValues;
-};
+  getBoundingBox(buffer=0) {
+    // pads bounding box shape by set percentage
+    buffer = Number(buffer);
+    if (isNaN(buffer)) buffer = 0;
 
-PlotXYZ.prototype.getMatrixValues = function () {
-  
-};
+    let bounds = this.getGeoJSON().getBounds().pad(buffer);
+    let corners = {
+      northwest: bounds.getNorthWest(),
+      northeast: bounds.getNorthEast(),
+      southeast: bounds.getSouthEast(),
+      southwest: bounds.getSouthWest(),
+    }
+    return corners;
+  }
+
+}
