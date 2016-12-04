@@ -37,8 +37,8 @@ const runExtraction = (file) => {
         return !isNaN(ea.lat) && !isNaN(ea.lng) && !isNaN(ea.val);
       });
 
-      fulfill(res.splice(300, 310));
-      // fulfill(res);
+      // fulfill(res.splice(300, 310));
+      fulfill(res);
       
     }).catch(reject)
   });
