@@ -28,6 +28,9 @@
 <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v0.28.0/mapbox-gl.js'></script>
 <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.28.0/mapbox-gl.css' rel='stylesheet' />
 
+<!-- Turf.js -->
+<script type="text/javascript" src="https://api.tiles.mapbox.com/mapbox.js/plugins/turf/v3.0.11/turf.min.js"></script>
+
 <!-- Example data extraction -->
 <script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
 <script src="extract.js"></script>
@@ -84,56 +87,59 @@ runExtraction('data.csv')
       }
     });
     
+    let fragmentedShapes = [];
+    let combinedShapes = [];
     let matrix = plot.getMatrix(100, 0.05);
+
+
     matrix.forEach((row, row_i) => {
       row.forEach((cell, col_i) => {
-        if (cell.properties.val) {
-          count += 1;
-          cell.properties.height = cell.properties.val * 100;
-          cell.properties.base_height = 0;
-          cell.properties.color = hsv2rgb(cell.properties.val * 20); // out of 100
-
-          let name = `grid_${row_i}_${col_i}`;
-          map.addSource(name, {
-            type: 'geojson',
-            data: cell
-          });
-
-          map.addLayer({
-            id: name,
-            type: 'fill-extrusion',
-            source: name,
-            layout: {},
-            paint: {
-              'fill-extrusion-color': {
-                'property': 'color',
-                'type': 'identity'
-              },
-              'fill-extrusion-height': {
-                'property': 'height',
-                'type': 'identity'
-              },
-              'fill-extrusion-base': {
-                'property': 'base_height',
-                'type': 'identity'
-              },
-              'fill-extrusion-opacity': 1
-            }
-          });
-        }
+        fragmentedShapes.push(cell);
       });
     });
-count = 0;
-    // map.addLayer({
-    //   'id': 'maine',
-    //   'type': 'fill',
-    //   'source': 'maine',
-    //   'layout': {},
-    //   'paint': {
-    //     'fill-color': '#088',
-    //     'fill-opacity': 0.8
-    //   }
-    // });
+
+    var reducedShapes = fragmentedShapes.reduce((a, b) => {
+      return turf.union(a, b);
+    });
+    console.log(reducedShapes);
+    L.geoJson(reducedShapes).eachLayer((row) => {
+      let i = row._leaflet_id;
+      let cell = row.feature;
+
+      if (cell.properties.val) {
+        cell.properties.height = cell.properties.val * 1000;
+        cell.properties.base_height = 0;
+        cell.properties.color = hsv2rgb(cell.properties.val * 20); // out of 100
+
+        let name = `grid_${i}`;
+        map.addSource(name, {
+          type: 'geojson',
+          data: cell
+        });
+
+        map.addLayer({
+          id: name,
+          type: 'fill-extrusion',
+          source: name,
+          layout: {},
+          paint: {
+            'fill-extrusion-color': {
+              'property': 'color',
+              'type': 'identity'
+            },
+            'fill-extrusion-height': {
+              'property': 'height',
+              'type': 'identity'
+            },
+            'fill-extrusion-base': {
+              'property': 'base_height',
+              'type': 'identity'
+            },
+            'fill-extrusion-opacity': 1
+          }
+        });
+      }
+    });
 
   });
 
