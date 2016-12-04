@@ -5,11 +5,6 @@ class PlotXYZ {
   constructor(settings) {
     this._settings = settings;
 
-    this.dimensions = {
-      height: settings.dimensions.height,
-      width:  settings.dimensions.width
-    };
-
     this.values = settings.values.map((ea) => {
       return PlotXYZ._getSinglePoint(ea);
     });
@@ -55,7 +50,7 @@ class PlotXYZ {
     let widthCount = Math.ceil(largestDirection == 'width' ? bounds[largestDirection]/blockSideLength : bounds[smallestDirection]/blockSideLength);
     let heightCount = Math.ceil(largestDirection == 'height' ? bounds[largestDirection]/blockSideLength : bounds[smallestDirection]/blockSideLength);
 
-    // now lets create a matric of GeoJSONs according to that grid
+    // now lets create a matrix of GeoJSONs according to that grid
     let resultingMatrix = [];
     for (var iH = 0; iH < heightCount; iH++) {
       let oneRow = [];
@@ -80,26 +75,20 @@ class PlotXYZ {
 
     // now let's determine the value for each of these GeoJSONs
     resultingMatrix = resultingMatrix.map((row) => {
-
-      console.log('row', L.geoJSON(row).getBounds());
-      let rowBounds = L.geoJSON(row).getBounds();
-
-      let bounds = L.geoJSON(cell).getBounds();
+      let rowBounds = L.geoJSON(row).getBounds().pad(1);
       let onesInRow = this.values.filter((value) => {
         let point = L.latLng(value);
-        return bounds.contains(point);
+        return rowBounds.contains(point);
       });
 
       row = row.map((cell) => {
         // check which of the points are in each
         let StartMilliseconds = new Date().getTime();
-        let bounds = L.geoJSON(cell).getBounds();
-        let onesInside = this.values.filter((value) => {
+        let bounds = L.geoJSON(cell).getBounds().pad(1);
+        let onesInside = onesInRow.filter((value) => {
           let point = L.latLng(value);
           return bounds.contains(point);
         });
-        let ElapsedMilliseconds = new Date().getTime() - StartMilliseconds;
-        console.log('elapsed', ElapsedMilliseconds/1000);
 
         let average = 0;
         if (onesInside.length) {
@@ -119,52 +108,6 @@ class PlotXYZ {
     })
 
     return resultingMatrix;
-
-    // const minLat = boundingBox[0][0];
-    // const maxLat = boundingBox[1][0];
-    // const minLng = boundingBox[0][1];
-    // const maxLng = boundingBox[1][1];
-
-    // const width = this.dimensions.width;
-    // const height = this.dimensions.height;
-
-    // const vals = this.values;
-    // const latChange = (maxLat - minLat)/width;
-    // const lngChange = (maxLng - minLng)/height;
-
-    // let outputValues = [];
-
-    // for (var iW = 0; iW < width; iW++) {
-    //   for (var iH = 0; iH < height; iH++) {
-    //     let startLat = minLat + latChange * iW;
-    //     let endLat   = minLat + latChange * (iW + 1);
-    //     let startLng = minLng + lngChange * iH;
-    //     let endLng   = minLng + lngChange * (iH + 1);
-
-    //     let inRegion = vals.filter(function (ea) {
-    //       if (ea.lat > startLat && 
-    //           ea.lat < endLat && 
-    //           ea.lng > startLng && 
-    //           ea.lng  < endLng) {
-    //         return true;
-    //       } else {
-    //         return false;
-    //       }
-    //     }).map(function (ea) {
-    //       return ea.val;
-    //     });
-
-    //     if (inRegion.length) {
-    //       let sum = inRegion.reduce(function(a, b) { return a + b; });
-    //       let avg = sum / inRegion.length;
-    //       outputValues.push(avg);
-    //     } else {
-    //       outputValues.push(0);
-    //     }
-    //   }
-    // }
-
-    // return outputValues;
   }
 
   getBoundingBox(buffer=0) {
