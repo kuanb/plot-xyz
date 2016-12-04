@@ -91,17 +91,62 @@ runExtraction('data.csv')
     let combinedShapes = [];
     let matrix = plot.getMatrix(100, 0.05);
 
-
     matrix.forEach((row, row_i) => {
       row.forEach((cell, col_i) => {
         fragmentedShapes.push(cell);
       });
     });
 
-    var reducedShapes = fragmentedShapes.reduce((a, b) => {
-      return turf.union(a, b);
+    let reducedShapes = fragmentedShapes.filter((ea) => {
+      return ea && ea.properties && ea.properties.val > 0;
     });
+
+    const scaleMax = 5;
+    const scaleMin = 0;
+    const categories = 20;
+
+    const segmentLength = (5 - 0)/20;
+    let segmentIds = {};
+    let segmentIdsList = [];
+    
+    for (var i = 0; i < 20; i++) {
+      let segmentId = 0 + (segmentLength * i);
+      segmentIds[segmentId] = [];
+      segmentIdsList.push(segmentId);
+    }
+
+    let threshold = segmentLength/2;
+    reducedShapes.forEach((shape) => {
+      let selected;
+      segmentIdsList.forEach((ea) => {
+        if (Math.abs(ea - shape.properties.val) < threshold) {
+          selected = ea;
+        }
+      });
+
+      if (selected) {
+        segmentIds[selected].push(shape);
+      }
+    });
+
+    reducedShapes = Object.keys(segmentIds).filter((segment) => {
+      return segmentIds[segment].length;
+    }).map((segment) => {
+      if (segmentIds[segment].length > 1) {
+        return segmentIds[segment].reduce((a, b) => {
+          // only union if values are close enough
+          console.log(segmentIds[segment])
+          console.log(a, b);
+          let difference = Math.abs(a.properties.val - b.properties.val);
+          return turf.union(a, b);
+        });
+      } else {
+        return segmentIds[segment][0];
+      }
+    })
+
     console.log(reducedShapes);
+
     L.geoJson(reducedShapes).eachLayer((row) => {
       let i = row._leaflet_id;
       let cell = row.feature;
