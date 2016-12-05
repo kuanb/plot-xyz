@@ -119,41 +119,73 @@ runExtraction('data.csv')
     reducedShapes.forEach((shape) => {
       let selected;
       segmentIdsList.forEach((ea) => {
-        if (Math.abs(ea - shape.properties.val) < threshold) {
-          selected = ea;
+        if (shape.properties.val > ea - threshold) {
+          segmentIds[String(ea)].push(shape);
         }
       });
+    });
 
-      if (selected) {
-        segmentIds[selected].push(shape);
+    // sort keys so that they are incrementing
+    reducedShapes = Object.keys(segmentIds).sort((a, b) => {
+      a = Number(a);
+      b = Number(b);
+      if (a < b) {
+        return -1;
+      } else if (a > b) {
+        return 1;
+      } else {
+        return 0;
       }
     });
 
-    reducedShapes = Object.keys(segmentIds).filter((segment) => {
-      return segmentIds[segment].length;
-    }).map((segment) => {
-      if (segmentIds[segment].length > 1) {
-        return segmentIds[segment].reduce((a, b) => {
-          // only union if values are close enough
-          console.log(segmentIds[segment])
-          console.log(a, b);
-          let difference = Math.abs(a.properties.val - b.properties.val);
+    reducedShapes = reducedShapes.filter(function (segment) {
+      return segmentIds[String(segment)].length > 0;
+    }).map(function (segment) {
+      let seg = segmentIds[String(segment)];
+      let reducedSegment;
+      if (seg.length > 1) {
+        reducedSegment = seg.reduce((a, b) => {
           return turf.union(a, b);
         });
       } else {
-        return segmentIds[segment][0];
+        reducedSegment = seg[0];
       }
-    })
+      reducedSegment.properties.val = Number(segment);
+      console.log('processed val', JSON.parse(JSON.stringify(reducedSegment)));
+      return reducedSegment;
+    }).map(function (ea) {
+      console.log(ea.properties.val)
+      return ea;
+    });
 
-    console.log(reducedShapes);
+    console.log('reducedShapes' , reducedShapes.map((ea) => { 
+        return ea.properties.val; 
+      })
+    );
+
+    reducedShapes.map((multipolygon) => {
+      console.log(multipolygon.properties.val)
+      return multipolygon.geometry.coordinates.map((points) => {
+        return {
+          geometry: {
+            type: 'Polygon', 
+            coordinates: points
+          },
+          properties: multipolygon.properties,
+          type: 'Feature' 
+        };
+      })
+    }).reduce((a, b) => {
+      return a.concat(b);
+    });
 
     L.geoJson(reducedShapes).eachLayer((row) => {
       let i = row._leaflet_id;
-      let cell = row.feature;
+      cell = row.feature;
 
       if (cell.properties.val) {
         cell.properties.height = cell.properties.val * 1000;
-        cell.properties.base_height = 0;
+        cell.properties.base_height = (cell.properties.val - segmentLength) * 1000;
         cell.properties.color = hsv2rgb(cell.properties.val * 20); // out of 100
 
         let name = `grid_${i}`;
