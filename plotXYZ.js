@@ -73,31 +73,50 @@ class PlotXYZ {
       resultingMatrix.push(oneRow);
     }
 
+    // get the shortest distance from the sides of the row
+    // this will be used to determine "decay" of value from point
+    let tempRow = L.geoJSON(resultingMatrix[0]);
+    let tempRowBounds = tempRow.getBounds().pad(resolution/100);
+    const decayDistance = haversine(tempRowBounds._northEast, tempRowBounds._southWest)/2;
+
+    // remove all variables just created for temp
+    tempRow = null;
+    tempRowBounds = null;
+
     // now let's determine the value for each of these GeoJSONs
     resultingMatrix = resultingMatrix.map((row) => {
-      let rowBounds = L.geoJSON(row).getBounds().pad(1);
+      let rowBounds = L.geoJSON(row).getBounds().pad(resolution/100);
       let onesInRow = this.values.filter((value) => {
         let point = L.latLng(value);
         return rowBounds.contains(point);
       });
 
       row = row.map((cell) => {
+        let geoJsonCell = L.geoJSON(cell).getBounds();
+        let bounds = geoJsonCell.pad(resolution/100);
+
         // check which of the points are in each
-        let StartMilliseconds = new Date().getTime();
-        let bounds = L.geoJSON(cell).getBounds().pad(1);
         let onesInside = onesInRow.filter((value) => {
           let point = L.latLng(value);
           return bounds.contains(point);
         });
 
         let average = 0;
+        let middleOfCell = geoJsonCell.getCenter();
+        let divideByThisValue = 0;
         if (onesInside.length) {
           onesInside.forEach((ea) => {
             if (!isNaN(ea.val)) {
-              average += Number(ea.val);
+              let distanceFromCellCenter = haversine(middleOfCell, ea);
+              let ratio = 1;
+              if (decayDistance > distanceFromCellCenter) {
+                ratio = Math.abs(decayDistance - distanceFromCellCenter)/decayDistance;
+              }
+              average += Number(ea.val) * ratio;
+              divideByThisValue += ratio;
             }
           });
-          average = average/onesInside.length;
+          average = average/divideByThisValue;
         }
         if (!cell.properties) cell.properties = {};
         cell.properties.val = average;

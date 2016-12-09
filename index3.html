@@ -36,8 +36,9 @@
 <script src="extract.js"></script>
 
 <!-- New library -->
-<script src="hsv2rgb.js"></script>
-<script src="plotXYZ.js"></script>
+<script src="./hsv2rgb.js"></script>
+<script src="./haversine.js"></script>
+<script src="./plotXYZ.js"></script>
 
 <!-- Three JS dependencies -->
 <!-- <script src="three.js"></script> -->
@@ -75,10 +76,13 @@ runExtraction('data.csv')
     container: 'map'
   });
 
+  var nav = new mapboxgl.NavigationControl();
+  map.addControl(nav, 'top-left');
+
   map.on('load', function() {
     
     let squaresWithValue = [];
-    let matrix = plot.getMatrix(100, 0.05);
+    let matrix = plot.getMatrix(1000, 0.05);
 
     matrix.forEach((row, row_i) => {
       row.forEach((cell, col_i) => {
@@ -88,15 +92,13 @@ runExtraction('data.csv')
       });
     });
 
-    console.log('squaresWithValue', squaresWithValue)
-
     let name = 'everything';
     let shapefile = squaresWithValue;
 
     shapefile = shapefile.map(function (ea, i) {
       ea.properties.height = ea.properties.val * 1000;
       ea.properties.base_height = 0;
-      ea.properties.color = hsv2rgb(ea.properties.val * 20); // out of 100
+      ea.properties.color = generateColor(ea.properties.val * 20); // out of 100
       return ea;
     })
 
