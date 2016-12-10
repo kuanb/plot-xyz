@@ -1,0 +1,26 @@
+{
+  "name": "plot-xyz",
+  "version": "0.0.1",
+  "description": "3d heatmapping tool",
+  "main": "",
+  "dependencies": {
+    "leaflet": "^1.0.2",
+    "mapshaper": "^0.3.39"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.18.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kuanb/plot-xyz.git"
+  },
+  "author": "Kuan Butts",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/kuanb/plot-xyz/issues"
+  },
+  "homepage": "https://github.com/kuanb/plot-xyz#readme"
+}

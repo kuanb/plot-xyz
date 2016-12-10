@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset=utf-8>
+  <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+
+  <title>PlotXYZ</title>
+</head>
+
+<style>
+  #map {
+    width: 1600px;
+    height: 600px
+  }
+</style>
+
+<body>
+  <div id="map"></div>
+</body>
+
+<!-- Outside dependencies -->
+<!-- Leaflet CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.0.2/leaflet.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.0.2/leaflet.css">
+
+<!-- Mapbox CDN -->
+<script src='https://api.tiles.mapbox.com/mapbox-gl-js/v0.28.0/mapbox-gl.js'></script>
+<link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.28.0/mapbox-gl.css' rel='stylesheet' />
+
+<!-- Turf.js -->
+<script type="text/javascript" src="https://api.tiles.mapbox.com/mapbox.js/plugins/turf/v3.0.11/turf.min.js"></script>
+
+<!-- Example data extraction -->
+<script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+<script src="extract.js"></script>
+
+<!-- New library -->
+<script src="./hsv2rgb.js"></script>
+<script src="./haversine.js"></script>
+<script src="./plot-xyz.js"></script>
+
+<!-- Three JS dependencies -->
+<!-- <script src="three.js"></script> -->
+
+<script>
+
+// global
+let plot;
+
+function clone(obj) {
+  if (null == obj || "object" != typeof obj) return obj;
+  var copy = obj.constructor();
+  for (var attr in obj) {
+      if (obj.hasOwnProperty(attr)) copy[attr] = obj[attr];
+  }
+  return copy;
+}
+
+runExtraction('data.csv')
+.then((resp) => {
+
+  const settings = {
+    values: resp,
+  };
+
+  plot = new PlotXYZ(settings);
+
+  mapboxgl.accessToken = 'pk.eyJ1Ijoia3VhbmIiLCJhIjoidXdWUVZ2USJ9.qNKXXP6z9_fKA8qrmpOi6Q';
+  var map = new mapboxgl.Map({
+    style: 'mapbox://styles/mapbox/light-v9',
+    center: [-99.131513, 19.570851],
+    zoom: 12,
+    pitch: 45,
+    bearing: -17.6,
+    container: 'map'
+  });
+
+  var nav = new mapboxgl.NavigationControl();
+  map.addControl(nav, 'top-left');
+
+  map.on('load', function() {
+    
+    let squaresWithValue = [];
+    let matrix = plot.getMatrix(1000, 0.05);
+
+    matrix.forEach((row, row_i) => {
+      row.forEach((cell, col_i) => {
+        if (cell && cell.properties && cell.properties.val > 0) {
+          squaresWithValue.push(cell);
+        }
+      });
+    });
+
+    let name = 'everything';
+    let shapefile = squaresWithValue;
+
+    shapefile = shapefile.map(function (ea, i) {
+      ea.properties.height = ea.properties.val * 1000;
+      ea.properties.base_height = 0;
+      ea.properties.color = generateColor(ea.properties.val * 20); // out of 100
+      return ea;
+    })
+
+    shapefile = { "type": "FeatureCollection",
+    "features": shapefile
+     }
+
+      map.addSource(name, {
+        type: 'geojson',
+        data: shapefile
+      });
+
+      map.addLayer({
+        id: name,
+        type: 'fill-extrusion',
+        source: name,
+        layout: {},
+        paint: {
+          'fill-extrusion-color': {
+            'property': 'color',
+            'type': 'identity'
+          },
+          'fill-extrusion-height': {
+            'property': 'height',
+            'type': 'identity'
+          },
+          'fill-extrusion-base': {
+            'property': 'base_height',
+            'type': 'identity'
+          },
+          'fill-extrusion-opacity': 1
+        }
+      });
+
+  });
+
+});
+
+</script>
+
+</html>
